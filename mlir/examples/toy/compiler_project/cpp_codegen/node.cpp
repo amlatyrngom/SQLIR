@@ -1,6 +1,8 @@
-#include "node.h"
+#include "cpp_codegen/node.h"
 #include "mlir/MLIRGen.h"
+#include <iostream>
 
+using namespace mlir;
 
 namespace gen {
 
@@ -48,40 +50,44 @@ void Function::Visit(std::ostream *os) const {
   *os << "}" << std::endl << std::endl;
 }
 
-void Function::Visit(sqlir::MLIRGen* mlir_gen) {
-  ScopedHashTableScope<llvm::StringRef, mlir::Value> var_scope(mlir_gen->SymTable());
+void Function::Visit(mlirgen::MLIRGen* mlir_gen) const {
+  ScopedHashTableScope<llvm::StringRef, mlir::Value> var_scope(*mlir_gen->SymTable());
   // Add Function Prototype
-  llvm::SmallVector<mlir::Type, 4> arg_types(params_.size(),
-                                             getType(VarType{}));
-  auto func_type = mlir_gen->Builder()->getFunctionType(arg_types, llvm::None);
-  auto function = mlir::FuncOp::create(location, proto.getName(), func_type);
-  if (!function)
-    return nullptr;
+  llvm::SmallVector<mlir::Type, 4> arg_types;
+  for (const auto& param: params_) {
+    auto type = param.type_->Visit(mlir_gen);
+    arg_types.push_back(type);
+  }
+  auto ret_type = ret_type_->Visit(mlir_gen);
+  auto func_type = mlir_gen->Builder()->getFunctionType(arg_types, ret_type);
+  auto function = mlir::FuncOp::create(mlir_gen->Loc(), name_.ident_, func_type);
+  if (!function) {
+    std::cout << "Cannot create function proto" << std::endl;
+    abort();
+  }
   auto &entryBlock = *function.addEntryBlock();
   // Declare all the function arguments in the symbol table.
   for (const auto &name_value :
        llvm::zip(params_, entryBlock.getArguments())) {
-    if (failed(declare(std::get<0>(name_value)->symbol_.ident_,
-                       std::get<1>(name_value))))
-      return nullptr;
+    if (failed(mlir_gen->Declare(std::get<0>(name_value).symbol_.ident_,
+                       std::get<1>(name_value)))) {
+      std::cout << "Cannot declare args" << std::endl;
+      abort();
+    }
+
   }
 
   // Set the insertion point in the builder to the beginning of the function
   // body, it will be used throughout the codegen to create operations in this
   // function.
-  builder.setInsertionPointToStart(&entryBlock);
-
-  ReturnOp returnOp;
-  if (!entryBlock.empty())
-    returnOp = dyn_cast<ReturnOp>(entryBlock.back());
-  if (!returnOp) {
-    builder.create<ReturnOp>(loc(funcAST.getProto()->loc()));
-  } else if (returnOp.hasOperand()) {
-    // Otherwise, if this return operation has an operand then add a result to
-    // the function.
-    function.setType(builder.getFunctionType(function.getType().getInputs(),
-                                             getType(VarType{})));
+  mlir_gen->Builder()->setInsertionPointToStart(&entryBlock);
+  for (const auto& stmt: body_) {
+    stmt->Visit(mlir_gen);
   }
+
+
+  function.print(llvm::errs());
+
   mlir_gen->Module()->push_back(function);
 }
 
@@ -115,6 +121,20 @@ void VarDecl::Visit(std::ostream *os) const {
     expr_->Visit(os);
   }
   *os << ";" << std::endl;
+}
+
+void VarDecl::Visit(mlirgen::MLIRGen* mlir_gen) const {
+  mlir::Value value = expr_->Visit(mlir_gen);
+  if (!value) {
+    std::cout << "Unable to make value." << std::endl;
+    abort();
+  }
+
+  // Register the value in the symbol table.
+  if (failed(mlir_gen->Declare(sym_.ident_, value))) {
+    std::cout << "Unable to declare value." << std::endl;
+    abort();
+  }
 }
 
 
@@ -205,6 +225,20 @@ void ReturnStmt::Visit(std::ostream *os) const {
   // Print expression
   if (ret_ != nullptr) ret_->Visit(os);
   *os << ";" << std::endl;
+}
+
+void ReturnStmt::Visit(mlirgen::MLIRGen* mlir_gen) const {
+  auto location = mlir_gen->Loc();
+
+  // 'return' takes an optional expression, handle that case here.
+  mlir::Value expr = nullptr;
+  if (ret_ != nullptr) {
+    expr = ret_->Visit(mlir_gen);
+  }
+
+  // Otherwise, this return operation has zero operands.
+  mlir_gen->Builder()->create<ReturnOp>(location, expr ? llvm::makeArrayRef(expr)
+                                          : ArrayRef<mlir::Value>());
 }
 
 

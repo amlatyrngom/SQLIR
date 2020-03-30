@@ -1,5 +1,5 @@
-set(CMAKE_CXX_STANDARD 20)
-add_subdirectory(include)
+set(CMAKE_CXX_STANDARD 17)
+#add_subdirectory(include)
 
 message("I AM BEING RUN!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
@@ -14,8 +14,8 @@ add_toy_chapter(compiler_project
   main.cpp
   ${ENTIER_SOURCES}
 
-  DEPENDS
-  CompilerProjectOpsIncGen
+  #DEPENDS
+  #CompilerProjectOpsIncGen
   )
 
 

@@ -10,16 +10,33 @@
 #include <iostream>
 #include <cassert>
 
+#include "mlir/Analysis/Verifier.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/Module.h"
+#include "mlir/Parser.h"
+#include "mlir/Dialect.h"
+#include "mlir/MLIRGen.h"
+
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorOr.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/raw_ostream.h"
+
+
 using namespace std;
 
-void DumpMLIR(gen::Node* node) {
+void DumpMLIR(const gen::Node* node) {
   // TODO(Create Dialect);
-  mlir::registerDialect<mlir::sqlir::SQLIRDialect>();
+  mlir::registerDialect<mlir::sqlir::SqlIRDialect>();
   mlir::MLIRContext context;
 
+  mlirgen::MLIRGen mlir_gen(context);
+  mlir::OwningModuleRef module = mlir_gen.mlirGen(node);
+  if (!module) std::cout << "ERRRRRRR" << std::endl;
 
-  node.Visit(context);
-
+  module->dump();
 }
 
 
@@ -41,20 +58,17 @@ int main() {
   // Start the main function
   gen::FunctionBuilder main_fn(&cg);
   main_fn.SetName(cg.GetSymbol("Main"));
-  main_fn.AddField({T.GetType(gen::PrimType::Int), main_arg_ident});
-  main_fn.SetRetType(T.GetType(gen::PrimType::Int));
+  main_fn.AddField({T.GetType(gen::PrimType::I64), main_arg_ident});
+  main_fn.SetRetType(T.GetType(gen::PrimType::I64));
   // Get Rate
   auto rate_sym = cg.GetSymbol("rate");
   auto rate = E.MakeExpr(rate_sym);
-  main_fn.Declare(rate_sym, E.IntLiteral(37));
-  main_fn.Return(E.Mul(rate, main_arg));
+  main_fn.Declare(rate_sym, E.FloatLiteral(37.73));
+  main_fn.Return(E.IMul(rate, main_arg));
 
   auto main_node = main_fn.Finish();
 
   DumpMLIR(main_node);
-  auto mlir_module = main_node.Visit();
-
-
 
   // Finish main
   file_builder.Add(main_fn.Finish());

@@ -1,5 +1,8 @@
-#include "expr.h"
+#include "cpp_codegen/expr.h"
 #include <iostream>
+#include "mlir/MLIRGen.h"
+
+using namespace mlir;
 
 namespace gen {
 
@@ -21,6 +24,34 @@ void LiteralExpr::Visit(std::ostream *os) const {
   }
 }
 
+mlir::Value LiteralExpr::Visit(mlirgen::MLIRGen* mlir_gen) const {
+  switch (Op()) {
+    case ExprType::Int: {
+      mlir::Type type = mlir_gen->Builder()->getIntegerType(64, true);
+      auto val = std::get<int64_t>(val_);
+      auto mlir_attr = mlir_gen->Builder()->getIntegerAttr(type, val);
+      return mlir_gen->Builder()->create<ConstantOp>(mlir_gen->Loc(), type, mlir_attr);
+    }
+    case ExprType::Float: {
+      mlir::Type type = mlir_gen->Builder()->getF64Type();
+      auto val = std::get<double>(val_);
+      auto mlir_attr = mlir_gen->Builder()->getFloatAttr(type, val);
+      return mlir_gen->Builder()->create<ConstantOp>(mlir_gen->Loc(), type, mlir_attr);
+    }
+    default:
+      std::cout << "Not a literal expression!" << std::endl;
+      abort();
+  }
+}
+
+mlir::Value IdentExpr::Visit(mlirgen::MLIRGen* mlir_gen) const {
+  if (auto variable = mlir_gen->SymTable()->lookup(symbol_.ident_))
+    return variable;
+
+  emitError(mlir_gen->Loc(), "error: unknown variable '")
+      << std::string(symbol_.ident_) << "'";
+  return nullptr;
+}
 
 void AssignOp::Visit(std::ostream *os) const {
   // Gen member access
@@ -212,15 +243,21 @@ void BinaryOp::Visit(std::ostream *os) const {
   auto rhs = Child(1);
   lhs->Visit(os);
   switch (Op()) {
-    case ExprType::Add:*os << "+";
+    case ExprType::IAdd:
+    case ExprType::FAdd:
+      *os << "+";
       break;
-    case ExprType::Sub:*os << "-";
+    case ExprType::ISub:
+    case ExprType::FSub:
+      *os << "-";
       break;
-    case ExprType::Mul:*os << "*";
+    case ExprType::IMul:
+    case ExprType::FMul:
+      *os << "*";
       break;
-    case ExprType::Div:*os << "/";
+    case ExprType::IDiv:*os << "/";
       break;
-    case ExprType::Mod:*os << "%";
+    case ExprType::IMod:*os << "%";
       break;
     case ExprType::Lt:*os << "<";
       break;
@@ -256,6 +293,36 @@ void BinaryOp::Visit(std::ostream *os) const {
 
   // Close paren
   *os << ')';
+}
+
+mlir::Value BinaryOp::Visit(mlirgen::MLIRGen *mlir_gen) const {
+  // Gen binary op
+  auto lhs = Child(0)->Visit(mlir_gen);
+  auto rhs = Child(1)->Visit(mlir_gen);
+
+  switch (Op()) {
+    case ExprType::IAdd: {
+      // Otherwise, this return operation has zero operands.
+      return mlir_gen->Builder()->create<mlir::AddIOp>(mlir_gen->Loc(), lhs, rhs);
+    }
+    case ExprType::FAdd: {
+      // Otherwise, this return operation has zero operands.
+      return mlir_gen->Builder()->create<mlir::AddFOp>(mlir_gen->Loc(), lhs, rhs);
+    }
+    case ExprType::IMul: {
+      // Otherwise, this return operation has zero operands.
+      return mlir_gen->Builder()->create<mlir::MulIOp>(mlir_gen->Loc(), lhs, rhs);
+    }
+    case ExprType::FMul: {
+      // Otherwise, this return operation has zero operands.
+      return mlir_gen->Builder()->create<mlir::MulFOp>(mlir_gen->Loc(), lhs, rhs);
+    }
+    default: {
+      std::cout << "Unsupported Binary Op" << std::endl;
+      return nullptr;
+    }
+  }
+
 }
 
 }

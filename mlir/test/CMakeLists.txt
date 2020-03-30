@@ -53,6 +53,7 @@ if(LLVM_BUILD_EXAMPLES)
     toyc-ch5
     toyc-ch6
     toyc-ch7
+    compiler_project
     )
 endif()
 

@@ -46,13 +46,13 @@ set(MLIR_TEST_DEPENDS
 
 if(LLVM_BUILD_EXAMPLES)
   list(APPEND MLIR_TEST_DEPENDS
-    toyc-ch1
-    toyc-ch2
-    toyc-ch3
-    toyc-ch4
-    toyc-ch5
-    toyc-ch6
-    toyc-ch7
+    # toyc-ch1
+    # toyc-ch2
+    # toyc-ch3
+    # toyc-ch4
+    # toyc-ch5
+    # toyc-ch6
+    # toyc-ch7
     compiler_project
     )
 endif()

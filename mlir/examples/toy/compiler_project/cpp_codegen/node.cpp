@@ -1,4 +1,6 @@
 #include "node.h"
+#include "mlir/MLIRGen.h"
+
 
 namespace gen {
 
@@ -44,6 +46,43 @@ void Function::Visit(std::ostream *os) const {
   }
   // Close function
   *os << "}" << std::endl << std::endl;
+}
+
+void Function::Visit(sqlir::MLIRGen* mlir_gen) {
+  ScopedHashTableScope<llvm::StringRef, mlir::Value> var_scope(mlir_gen->SymTable());
+  // Add Function Prototype
+  llvm::SmallVector<mlir::Type, 4> arg_types(params_.size(),
+                                             getType(VarType{}));
+  auto func_type = mlir_gen->Builder()->getFunctionType(arg_types, llvm::None);
+  auto function = mlir::FuncOp::create(location, proto.getName(), func_type);
+  if (!function)
+    return nullptr;
+  auto &entryBlock = *function.addEntryBlock();
+  // Declare all the function arguments in the symbol table.
+  for (const auto &name_value :
+       llvm::zip(params_, entryBlock.getArguments())) {
+    if (failed(declare(std::get<0>(name_value)->symbol_.ident_,
+                       std::get<1>(name_value))))
+      return nullptr;
+  }
+
+  // Set the insertion point in the builder to the beginning of the function
+  // body, it will be used throughout the codegen to create operations in this
+  // function.
+  builder.setInsertionPointToStart(&entryBlock);
+
+  ReturnOp returnOp;
+  if (!entryBlock.empty())
+    returnOp = dyn_cast<ReturnOp>(entryBlock.back());
+  if (!returnOp) {
+    builder.create<ReturnOp>(loc(funcAST.getProto()->loc()));
+  } else if (returnOp.hasOperand()) {
+    // Otherwise, if this return operation has an operand then add a result to
+    // the function.
+    function.setType(builder.getFunctionType(function.getType().getInputs(),
+                                             getType(VarType{})));
+  }
+  mlir_gen->Module()->push_back(function);
 }
 
 

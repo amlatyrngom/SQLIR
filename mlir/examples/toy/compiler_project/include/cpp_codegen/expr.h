@@ -147,6 +147,24 @@ class LiteralExpr : public Expr {
   std::variant<std::string_view, int64_t, double, char, bool> val_{};
 };
 
+
+class SelectExpr : public Expr {
+ public:
+  // Integer literal
+  explicit SelectExpr() {
+
+  }
+
+  void Visit(std::ostream *os) const override {};
+  virtual mlir::Value Visit(mlirgen::MLIRGen *mlir_gen) const override;
+
+ private:
+  td::vector<int> column_ids_
+  std::vector<expression> projections_;
+  std::vector<expression> filters_;
+  int table_id;
+};
+
 // An assignment or compound assignment.
 class AssignOp : public Expr {
  public:

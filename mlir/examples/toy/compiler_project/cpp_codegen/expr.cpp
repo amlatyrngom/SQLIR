@@ -44,6 +44,33 @@ mlir::Value LiteralExpr::Visit(mlirgen::MLIRGen* mlir_gen) const {
   }
 }
 
+mlir::Value SelectExpr::Visit(mlirgen::MLIRGen* mlir_gen) const {
+  auto block1 = mlir_gen->Builder()->createBlock(mlir_gen->Builder()->getBlock()->getParent(),
+    mlir_gen->Builder()->getBlock()->getParent()->end());
+
+  mlir_gen->Builder()->setInsertionPointToStart(block1);
+
+  for(auto id: column_ids_) {
+    llvm::StringRef callee("getcolumn");
+    auto location = mlir_gen->Loc();
+
+    // Codegen the operands first.
+    SmallVector<mlir::Value, 2> operands;
+    mlir::Type type = mlir_gen->Builder()->getIntegerType(64, true);
+    auto mlir_attr = mlir_gen->Builder()->getIntegerAttr(type, table_id_);
+    auto arg = mlir_gen->Builder()->create<ConstantOp>(mlir_gen->Loc(), type, mlir_attr);
+    operands.push_back(arg);
+
+    auto mlir_attr = mlir_gen->Builder()->getIntegerAttr(type, id);
+    arg = mlir_gen->Builder()->create<ConstantOp>(mlir_gen->Loc(), type, mlir_attr);
+    operands.push_back(arg);
+
+    builder.create<GenericCallOp>(location, callee, operands);
+  }
+
+
+}
+
 mlir::Value IdentExpr::Visit(mlirgen::MLIRGen* mlir_gen) const {
   if (auto variable = mlir_gen->SymTable()->lookup(symbol_.ident_))
     return variable;

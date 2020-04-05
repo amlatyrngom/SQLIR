@@ -77,7 +77,7 @@ class Function : public Node {
         name_(name),
         ret_type_(ret_type),
         params_(std::move(params)),
-        body_(std::move(body)) {}
+        body_(std::move(body)){}
 
   virtual ~Function() = default;
 
@@ -91,6 +91,7 @@ class Function : public Node {
   const Type *ret_type_;
   std::vector<Field> params_;
   std::vector<const Node *> body_;
+  bool is_select_function(false);
 };
 
 // A Struct
